@@ -1,0 +1,67 @@
+name: Build Shinylive site and deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      - name: Install R packages
+        run: |
+          Rscript -e 'install.packages(c("shinylive","jsonlite","bslib","writexl"), repos="https://cloud.r-project.org")'
+
+      - name: Ensure app/www exists
+        run: mkdir -p app/www
+
+      - name: Fetch SheetJS if missing (local vendor for offline/Pages)
+        run: |
+          if [ ! -f "app/www/xlsx.full.min.js" ]; then
+            curl -L -o app/www/xlsx.full.min.js \
+              https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js
+          fi
+
+      - name: Export Shinylive site
+        run: |
+          Rscript -e 'shinylive::export("app", "site")'
+
+      - name: Bundle site.zip
+        run: zip -r site.zip site
+
+      - name: Upload site.zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-zip
+          path: site.zip
+          retention-days: 14
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
