@@ -1,1 +1,0 @@
-# certara-ksnyder.github.io
