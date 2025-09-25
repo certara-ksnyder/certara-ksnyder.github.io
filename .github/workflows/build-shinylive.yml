@@ -24,7 +24,7 @@ jobs:
 
       - name: Install R packages
         run: |
-          Rscript -e 'install.packages(c("shinylive","jsonlite","bslib","writexl",'archive', 'gh', 'httr2', 'pkgdepends'), repos="https://cloud.r-project.org")'
+          Rscript -e 'install.packages(c("shinylive","jsonlite","bslib","writexl","archive", "gh", "httr2", "pkgdepends"), repos="https://cloud.r-project.org")'
 
       - name: Ensure app/www exists
         run: mkdir -p app/www
