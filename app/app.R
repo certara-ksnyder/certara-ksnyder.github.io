@@ -252,7 +252,7 @@ server <- function(input, output, session) {
     ALT=c("ALT","SGPT"), AST=c("AST","SGOT"), CK=c("CK","CPK"), TBIL=c("TBIL","Total Bilirubin"),
     DBIL=c("DBIL","Direct Bilirubin"), IBIL=c("IBIL","Indirect Bilirubin"), BUN=c("BUN","UREA","Urea"),
     CREAT=c("CREAT","CRE","CR"), CHOL=c("CHOL","TCHO"), GLU=c("GLU","Glucose"), PHOS=c("PHOS","P"),
-    NA=c("NA","Na"), K=c("K","K+"), CL=c("CL"), CA=c("CA"), TG=c("TG"), GGT=c("GGT"),
+    'NA'=c("NA","Na"), K=c("K","K+"), CL=c("CL"), CA=c("CA"), TG=c("TG"), GGT=c("GGT"),
     WBC=c("WBC"), NEUT=c("NEUT","NE%"), `#NEUT`=c("#NEUT","NE#"),
     LYMP=c("LYMP","LY%"), `#LYMP`=c("#LYMP","LY#"),
     MONO=c("MONO","MO%"), `#MONO`=c("#MONO","MO#"),
