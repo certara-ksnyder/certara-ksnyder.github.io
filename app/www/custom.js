@@ -1,4 +1,4 @@
-/* www/custom.js — Browser-side parse & export for Shinylive and classic Shiny */
+/* www/custom.js */
 (function () {
   "use strict";
 
@@ -8,7 +8,7 @@
     setTimeout(function(){ whenShinyReady(cb, tries+1); }, 50);
   }
 
-  // Optional: parse Excel/CSV client-side (used in Shinylive)
+  // Optional: parse Excel client-side (useful in Shinylive)
   function parseFile(file) {
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
@@ -30,13 +30,9 @@
   }
 
   whenShinyReady(function () {
-    // Confirm SheetJS is available (should be, via local /www/xlsx.full.min.js)
-    var hasSheetJS = !!(window.XLSX && XLSX.utils && XLSX.writeFile);
-    if (!hasSheetJS) {
-      console.error("SheetJS not loaded; browser export will not work.");
-    }
+    console.log("[custom.js] loaded; SheetJS:", !!(window.XLSX && XLSX.utils && XLSX.writeFile));
 
-    // Patch file input to parse files in-browser (Shinylive path)
+    // Patch file input to parse in browser (Shinylive)
     try {
       var fib = Shiny.fileInputBinding && Shiny.fileInputBinding.prototype;
       if (fib && typeof fib.onChange === "function") {
@@ -44,38 +40,31 @@
         fib.onChange = function () {
           var res = origOnChange.apply(this, arguments);
           try {
-            var ev = arguments[0];
-            var el = ev && ev.target ? ev.target : null;
+            var ev = arguments[0], el = ev && ev.target ? ev.target : null;
             if (!el || el.id !== "legacy_files") return res;
-
             var files = el.files ? Array.prototype.slice.call(el.files) : [];
-            if (!files.length) return res;
-
-            if (!(window.XLSX && XLSX.utils)) return res; // skip if SheetJS missing
+            if (!files.length || !(window.XLSX && XLSX.utils)) return res;
             (async function(){
               try {
                 var results = [];
                 for (var i=0; i<files.length; i++) results.push(await parseFile(files[i]));
                 Shiny.setInputValue("excel_parsed", { files: results }, { priority: "event" });
-              } catch (err) {
-                console.error(err); alert("Error parsing file(s) in browser: " + err);
-              }
+              } catch (err) { console.error(err); alert("Error parsing file(s) in browser: " + err); }
             })();
           } catch (e) {}
           return res;
         };
       }
-    } catch (e) {
-      console.warn("Could not patch fileInputBinding.onChange:", e);
-    }
+    } catch (e) { console.warn("Could not patch fileInputBinding.onChange:", e); }
 
-    // Receive R payload and trigger real XLSX download from the browser
+    // Download: build workbook in browser and save as .xlsx
     Shiny.addCustomMessageHandler("download_xlsx", function (payloadJSON) {
       try {
         if (!(window.XLSX && XLSX.utils && XLSX.writeFile)) {
           alert("Export unavailable: SheetJS not loaded.");
           return;
         }
+        console.log("[custom.js] download_xlsx message received");
         var payload = JSON.parse(payloadJSON);
         var wb = XLSX.utils.book_new();
         var sheetNames = Object.keys(payload.sheets || {});
@@ -87,10 +76,9 @@
           var ws = XLSX.utils.json_to_sheet(df, { header: cols, skipHeader: false });
           XLSX.utils.book_append_sheet(wb, ws, sheetName);
         }
-        XLSX.writeFile(wb, payload.filename || "SEND_abbrev.xlsx");
+        XLSX.writeFile(wb, payload.filename || "SEND_abbrev.xlsx"); // triggers browser download
       } catch (e) {
-        console.error(e);
-        alert("Export failed in browser: " + e);
+        console.error(e); alert("Export failed in browser: " + e);
       }
     });
   });

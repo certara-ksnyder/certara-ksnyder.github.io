@@ -26,11 +26,11 @@ from_excel_date <- function(x) {
 ui <- page_fillable(
   theme = bs_theme(bootswatch = "flatly"),
   title = "SEND Mapper (Shinylive)",
+  
   tags$head(
-    # Load SheetJS from local /www so it works offline and on Pages
-    tags$script(src = "xlsx.full.min.js"),
-    # JS bridge to parse & export
-    tags$script(src = "custom.js"),
+    # Try root path first (classic Shiny), fall back to /www (Shinylive), + cache-bust
+    tags$script(HTML("(function(){var u='?v=20250926';var s=document.createElement('script');s.src='custom.js'+u;s.onerror=function(){var s2=document.createElement('script');s2.src='www/custom.js'+u;document.head.appendChild(s2);};document.head.appendChild(s);}());")),
+    tags$script(HTML("(function(){var u='?v=20250926';var s=document.createElement('script');s.src='xlsx.full.min.js'+u;s.onerror=function(){var s2=document.createElement('script');s2.src='www/xlsx.full.min.js'+u;document.head.appendChild(s2);};document.head.appendChild(s);}());")),
     tags$style(HTML(".req{color:#a94442;font-weight:600}.ok{color:#2e7d32} code,pre{font-size:.9rem}"))
   ),
   layout_sidebar(
