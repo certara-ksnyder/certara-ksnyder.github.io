@@ -1,6 +1,4 @@
-# app.R
-# SEND Mapper: Shinylive-safe, browser export only in Shinylive; server download only in classic Shiny.
-
+# app.R  — Shinylive-safe Excel export (browser only, no downloadHandler)
 library(shiny)
 library(jsonlite)
 library(bslib)
@@ -25,49 +23,42 @@ from_excel_date <- function(x) {
   })
 }
 
-ui <- bslib::page_fillable(
-  theme = bslib::bs_theme(bootswatch = "flatly"),
-  title = "SEND Mapper (Shinylive or Server)",
+ui <- page_fillable(
+  theme = bs_theme(bootswatch = "flatly"),
+  title = "SEND Mapper (Shinylive)",
   tags$head(
-    # <<< IMPORTANT: use local SheetJS file so Shinylive export is self-contained >>>
+    # Load SheetJS from local /www so it works offline and on Pages
     tags$script(src = "xlsx.full.min.js"),
-    # JS bridge (signals shinylive + handles browser export)
+    # JS bridge to parse & export
     tags$script(src = "custom.js"),
     tags$style(HTML(".req{color:#a94442;font-weight:600}.ok{color:#2e7d32} code,pre{font-size:.9rem}"))
   ),
-  bslib::layout_sidebar(
-    sidebar = bslib::sidebar(
+  layout_sidebar(
+    sidebar = sidebar(
       h4("1) Upload legacy file(s)"),
-      fileInput("legacy_files", "Legacy data (.xlsx, .xls, .csv)",
-                accept = c(".xlsx",".xls",".csv"), multiple = TRUE),
-      helpText("Browser (Shinylive) parses client-side; classic Shiny reads on the server."),
+      fileInput("legacy_files", "(.xlsx / .xls / .csv)", accept = c(".xlsx",".xls",".csv"), multiple = TRUE),
+      helpText("Shinylive parses in the browser, classic Shiny can read on the server."),
       hr(),
-      h4("2) Template"),
-      checkboxInput("use_builtin_template","Use built-in 'SEND XLSX Metadata-Abbreviated' structure", TRUE),
-      fileInput("template_file", "Or upload a template to mirror", accept = ".xlsx"),
-      hr(),
-      h4("Study identifiers"),
+      h4("2) Study / Template"),
       textInput("studyid", "STUDYID", placeholder = "e.g., 405775-20250206-CPK"),
       textInput("usubid_col_prefix", "USUBJID prefix (default = STUDYID)"),
-      hr(),
-      h4("Study dates (ISO 8601)"),
       dateInput("rfstdtc", "DM.RFSTDTC (Start)"),
       dateInput("rfendtc", "DM.RFENDTC (End)"),
       hr(),
       actionButton("reset_all", "Reset", class = "btn btn-outline-danger")
     ),
-    bslib::card(
-      bslib::card_header("Workflow"),
+    card(
+      card_header("Workflow"),
       tabsetPanel(
         id = "nav",
         tabPanel("A. Select Sheets & Preview",
                  fluidRow(
                    column(4,
                           uiOutput("sheet_picker"),
-                          checkboxInput("first_row_header", "First row is header", TRUE),
-                          checkboxInput("has_units_row", "Second row has UNITS (CRO-1 style)", FALSE),
-                          checkboxInput("wide_tests", "Tests are columns (wide format)", TRUE),
-                          actionButton("parse_now", "Parse / Refresh Preview", class = "btn btn-primary")
+                          checkboxInput("first_row_header","First row is header", TRUE),
+                          checkboxInput("has_units_row","Second row has UNITS (CRO-1)", FALSE),
+                          checkboxInput("wide_tests","Tests are columns (wide)", TRUE),
+                          actionButton("parse_now","Parse / Refresh Preview", class="btn btn-primary")
                    ),
                    column(8, h5("Preview (first 25 rows)"), tableOutput("preview"))
                  )
@@ -77,10 +68,9 @@ ui <- bslib::page_fillable(
                    column(4,
                           uiOutput("id_cols_ui"), hr(),
                           selectInput("specimen","Default LBSPEC", c("SERUM","PLASMA","WHOLE BLOOD","URINE","OTHER"), "SERUM"),
-                          selectInput("category","Default LBCAT (sheet-level)",
-                                      c("CLINICAL CHEMISTRY","HEMATOLOGY","COAGULATION","URINALYSIS"), "CLINICAL CHEMISTRY"),
-                          checkboxInput("map_urine_semiquant","Map UA semi-quant (+/-) to STRESN (0..4)", TRUE),
-                          actionButton("auto_map","Auto-map common analytes", class = "btn btn-secondary")
+                          selectInput("category","Default LBCAT", c("CLINICAL CHEMISTRY","HEMATOLOGY","COAGULATION","URINALYSIS"), "CLINICAL CHEMISTRY"),
+                          checkboxInput("map_urine_semiquant","Map UA +/- to STRESN (0..4)", TRUE),
+                          actionButton("auto_map","Auto-map common analytes", class="btn btn-secondary")
                    ),
                    column(8, h5("Analyte Mapping (LBTESTCD → source column)"), uiOutput("analyte_map_ui"))
                  )
@@ -92,13 +82,13 @@ ui <- bslib::page_fillable(
                           textInput("dm_armcd_default","Default DM.ARMCD"),
                           textInput("dm_setcd_default","Default DM.SETCD")
                    ),
-                   column(6, h5("TS (key fields)"),
+                   column(6, h5("TS (key)"),
                           textInput("ts_species","SPECIES"),
                           textInput("ts_strain","STRAIN"),
                           textInput("ts_route","ROUTE"),
-                          textInput("ts_sndigver","SNDIGVER (IG Version)"),
-                          textInput("ts_sndctver","SNDCTVER (CT Version)"),
-                          textInput("ts_title","STITLE (Study Title)")
+                          textInput("ts_sndigver","SNDIGVER"),
+                          textInput("ts_sndctver","SNDCTVER"),
+                          textInput("ts_title","STITLE")
                    )
                  ),
                  hr(),
@@ -113,10 +103,11 @@ ui <- bslib::page_fillable(
         tabPanel("D. Validate & Export",
                  h5("Checks"), verbatimTextOutput("checks"), hr(),
                  h5("Export"),
-                 p("Exports Excel with LB, DM, TS, TA, TX (abbreviated SEND Explorer format)."),
-                 uiOutput("export_ui"),   # dynamic: shinylive vs server
+                 p("Exports Excel with LB, DM, TS, TA, TX (abbreviated, for analysis/visualization)."),
+                 # Always show the browser export button in Shinylive & classic Shiny
+                 actionButton("export_browser", "Export Excel (.xlsx)", class = "btn btn-success"),
                  br(), br(),
-                 strong("Note:"), p("Abbreviated dataset for analysis/visualization; not for regulatory submissions.")
+                 strong("Note:"), p("Not for regulatory submissions.")
         )
       )
     )
@@ -125,25 +116,24 @@ ui <- bslib::page_fillable(
 
 server <- function(input, output, session) {
   
-  rv <- reactiveValues(
-    parsed=NULL, data=NULL, cols=character(), analyte_map=list(),
-    animal_col=NULL, date_col=NULL, timepoint_col=NULL, sex_col=NULL, armcd_col=NULL, setcd_col=NULL
-  )
+  rv <- reactiveValues(parsed=NULL, data=NULL, cols=character(),
+                       analyte_map=list(), animal_col=NULL, date_col=NULL,
+                       timepoint_col=NULL, sex_col=NULL, armcd_col=NULL, setcd_col=NULL)
   
   observeEvent(input$reset_all, {
     rv$parsed <- rv$data <- NULL; rv$cols <- character(); rv$analyte_map <- list()
     rv$animal_col <- rv$date_col <- rv$timepoint_col <- rv$sex_col <- rv$armcd_col <- rv$setcd_col <- NULL
     updateTabsetPanel(session, "nav", "A. Select Sheets & Preview")
-    showNotification("Reset complete", type = "message")
+    showNotification("Reset complete", type="message")
   })
   
-  # Shinylive path (browser-parsed files provided by custom.js)
+  # Browser-parsed files from custom.js (Shinylive path)
   observeEvent(input$excel_parsed, {
     rv$parsed <- input$excel_parsed
-    showNotification(sprintf("Parsed %d file(s) in browser", length(rv$parsed$files %||% list())), type = "message")
+    showNotification(sprintf("Parsed %d file(s) in browser", length(rv$parsed$files %||% list())), type="message")
   }, ignoreInit = TRUE)
   
-  # Classic Shiny path (server parsing)
+  # Server parsing fallback (classic Shiny run)
   observeEvent(input$legacy_files, {
     req(input$legacy_files)
     files_df <- input$legacy_files
@@ -153,7 +143,7 @@ server <- function(input, output, session) {
       sheets_list <- list()
       if (ext %in% c("xlsx","xls")) {
         if (!requireNamespace("readxl", quietly = TRUE)) {
-          showNotification("Install 'readxl' for server Excel parsing: install.packages('readxl')", type = "error", duration = 7)
+          showNotification("Install 'readxl' for server Excel parsing: install.packages('readxl')", type="error", duration=7)
           next
         }
         sh_names <- readxl::excel_sheets(path)
@@ -165,14 +155,14 @@ server <- function(input, output, session) {
           sheets_list[[length(sheets_list)+1]] <- list(name = sn, data = rows)
         }
       } else if (ext == "csv") {
-        df <- try(utils::read.csv(path, header = FALSE, stringsAsFactors = FALSE, check.names = FALSE), silent = TRUE)
+        df <- try(utils::read.csv(path, header = FALSE, stringsAsFactors = FALSE, check.names = FALSE), silent=TRUE)
         if (!inherits(df, "try-error") && nrow(df)) {
           m <- as.matrix(df); m[is.na(m)] <- ""
           rows <- lapply(seq_len(nrow(m)), function(r) as.character(m[r, ]))
           sheets_list[[1]] <- list(name = tools::file_path_sans_ext(name), data = rows)
         }
       } else {
-        showNotification(sprintf("Unsupported file type: %s", name), type = "warning")
+        showNotification(sprintf("Unsupported file type: %s", name), type="warning")
         next
       }
       files[[i]] <- list(name = name, sheets = sheets_list)
@@ -180,7 +170,7 @@ server <- function(input, output, session) {
     files <- Filter(function(x) !is.null(x) && length(x$sheets), files)
     if (length(files)) {
       rv$parsed <- list(files = files)
-      showNotification(sprintf("Parsed %d file(s) on server", length(files)), type = "message")
+      showNotification(sprintf("Parsed %d file(s) on server", length(files)), type="message")
     }
   }, ignoreInit = TRUE)
   
@@ -222,9 +212,9 @@ server <- function(input, output, session) {
         } else paste0("V", seq_len(ncol(m)))
         
         if (isTRUE(input$first_row_header)) m <- m[-1,,drop=FALSE]
-        if (isTRUE(input$has_units_row)) { attr(m, "units_row") <- as.list(m[1, , drop=TRUE]); m <- m[-1,,drop=FALSE] }
+        if (isTRUE(input$has_units_row)) { attr(m, "units_row") <- as.list(m[1,,drop=TRUE]); m <- m[-1,,drop=FALSE] }
         head(m, 25)
-      }, silent = TRUE)
+      }, silent=TRUE)
       
       if (!inherits(df, "try-error")) {
         df$..file.. <- fl[[i]]$name
@@ -262,7 +252,7 @@ server <- function(input, output, session) {
     ALT=c("ALT","SGPT"), AST=c("AST","SGOT"), CK=c("CK","CPK"), TBIL=c("TBIL","Total Bilirubin"),
     DBIL=c("DBIL","Direct Bilirubin"), IBIL=c("IBIL","Indirect Bilirubin"), BUN=c("BUN","UREA","Urea"),
     CREAT=c("CREAT","CRE","CR"), CHOL=c("CHOL","TCHO"), GLU=c("GLU","Glucose"), PHOS=c("PHOS","P"),
-    'NA'=c("NA","Na"), K=c("K","K+"), CL=c("CL"), CA=c("CA"), TG=c("TG"), GGT=c("GGT"),
+    NA=c("NA","Na"), K=c("K","K+"), CL=c("CL"), CA=c("CA"), TG=c("TG"), GGT=c("GGT"),
     WBC=c("WBC"), NEUT=c("NEUT","NE%"), `#NEUT`=c("#NEUT","NE#"),
     LYMP=c("LYMP","LY%"), `#LYMP`=c("#LYMP","LY#"),
     MONO=c("MONO","MO%"), `#MONO`=c("#MONO","MO#"),
@@ -282,8 +272,7 @@ server <- function(input, output, session) {
       "RET%","#RET","PT","APTT","FIB","U_PH","U_PRO","U_SG","U_GLU","U_TURB"
     )))
     do.call(tagList, lapply(tgt, function(a) {
-      lab <- if (grepl("^U_", a)) paste0(a, " (Urinalysis)") else a
-      selectInput(paste0("map_", a), lab, choices = c("", rv$cols), selected = rv$analyte_map[[a]] %||% "")
+      selectInput(paste0("map_", a), a, choices = c("", rv$cols), selected = rv$analyte_map[[a]] %||% "")
     }))
   })
   observeEvent(input$auto_map, {
@@ -302,7 +291,6 @@ server <- function(input, output, session) {
     rv$analyte_map <- amap
   })
   
-  # ----- builders -----
   build_lb <- function() {
     req(rv$data, input$studyid, rv$animal_col, length(rv$analyte_map) > 0)
     df <- rv$data
@@ -400,7 +388,6 @@ server <- function(input, output, session) {
                check.names = FALSE, stringsAsFactors = FALSE)
   }
   
-  # Checks
   output$checks <- renderPrint({
     msgs <- c()
     if (!isTruthy(input$studyid)) msgs <- c(msgs, "[DM] STUDYID is required")
@@ -422,59 +409,18 @@ server <- function(input, output, session) {
     } else cat(paste(msgs, collapse = "\n"))
   })
   
-  # Export UI:
-  # - In Shinylive (client_is_shinylive==TRUE): show Browser Export only.
-  # - In classic Shiny: show Browser Export if SheetJS present, else server Download.
-  output$export_ui <- renderUI({
-    if (isTRUE(input$client_is_shinylive)) {
-      if (isTRUE(input$client_has_sheetjs)) {
-        actionButton("export_browser", "Export (Browser)", class = "btn btn-success")
-      } else {
-        tagList(
-          div(class="text-warning", "Browser export not ready. (SheetJS not loaded)"),
-          actionButton("enable_export", "Enable browser export", class="btn btn-primary")
-        )
-      }
-    } else {
-      if (isTRUE(input$client_has_sheetjs)) {
-        actionButton("export_browser", "Export (Browser)", class = "btn btn-success")
-      } else {
-        downloadButton("dl_xlsx", "Download Excel", class = "btn btn-success")
-      }
-    }
-  })
-  
-  # Ask client to (re)load SheetJS dynamically if needed
-  observeEvent(input$enable_export, {
-    session$sendCustomMessage("load_sheetjs", list())
-  })
-  
-  # Export (Browser) path—Shinylive & classic Shiny when SheetJS available
+  # ---- Browser export (single path used for Shinylive & classic Shiny) ----
   observeEvent(input$export_browser, {
-    req(isTRUE(input$client_has_sheetjs))
     req(input$studyid)
     lb <- build_lb(); dm <- build_dm(); ts <- build_ts(); ta <- build_ta(); tx <- build_tx()
-    if (is.null(lb) || !nrow(lb)) { showNotification("No LB rows to export. Check mappings.", type = "error"); return() }
+    if (is.null(lb) || !nrow(lb)) { showNotification("No LB rows to export. Check mappings.", type="error"); return() }
     payload <- list(
       filename = paste0("SEND_abbrev_", gsub("[^0-9A-Za-z_-]+","_", input$studyid), ".xlsx"),
-      sheets = list(LB=lb, DM=dm, TS=ts, TA=ta, TX=tx)
+      sheets   = list(LB=lb, DM=dm, TS=ts, TA=ta, TX=tx)
     )
     session$sendCustomMessage("download_xlsx",
-                              jsonlite::toJSON(payload, dataframe = "rows", auto_unbox = TRUE, na = "null"))
+                              jsonlite::toJSON(payload, dataframe="rows", auto_unbox=TRUE, na="null"))
   })
-  
-  # Classic Shiny server download (never shown in Shinylive)
-  output$dl_xlsx <- downloadHandler(
-    filename = function() paste0("SEND_abbrev_", gsub("[^0-9A-Za-z_-]+","_", input$studyid %||% "study"), ".xlsx"),
-    content = function(file) {
-      if (!requireNamespace("writexl", quietly = TRUE)) {
-        stop("Install 'writexl' for server-side Excel export: install.packages('writexl')")
-      }
-      lb <- build_lb(); dm <- build_dm(); ts <- build_ts(); ta <- build_ta(); tx <- build_tx()
-      if (is.null(lb) || !nrow(lb)) stop("No LB rows to export. Check mappings.")
-      writexl::write_xlsx(list(LB=lb,DM=dm,TS=ts,TA=ta,TX=tx), path = file)
-    }
-  )
 }
 
 shinyApp(ui, server)
