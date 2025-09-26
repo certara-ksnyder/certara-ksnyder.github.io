@@ -13,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -21,15 +22,24 @@ jobs:
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: 'release'
+          use-public-rspm: true  # faster CRAN binaries on Ubuntu
 
-      - name: Install R packages
-        run: |
-          Rscript -e 'install.packages(c("shinylive","jsonlite","bslib","writexl","archive", "gh", "httr2", "pkgdepends"), repos="https://cloud.r-project.org")'
+      # 👇 This installs R deps **and** the required system libraries on Ubuntu
+      - name: Install R dependencies (shinylive + deps)
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::shinylive
+            any::jsonlite
+            any::bslib
+            any::writexl
+          needs: shinylive
 
       - name: Ensure app/www exists
         run: mkdir -p app/www
 
-      - name: Fetch SheetJS if missing (local vendor for offline/Pages)
+      # Vendor SheetJS locally so browser export always works (no CDN needed)
+      - name: Fetch SheetJS if missing
         run: |
           if [ ! -f "app/www/xlsx.full.min.js" ]; then
             curl -L -o app/www/xlsx.full.min.js \
@@ -37,8 +47,7 @@ jobs:
           fi
 
       - name: Export Shinylive site
-        run: |
-          Rscript -e 'shinylive::export("app", "site")'
+        run: Rscript -e 'shinylive::export("app", "site")'
 
       - name: Bundle site.zip
         run: zip -r site.zip site
@@ -61,6 +70,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
